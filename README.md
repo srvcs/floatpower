@@ -1,59 +1,67 @@
 # srvcs-floatpower
 
-The floating-point exponentiation primitive of the srvcs.cloud distributed
-standard library.
+## Name
 
-Its single concern: **`base` raised to the power `exp`.** The result is a
-floating-point number (`base.powf(exp)`), so unlike the integer primitives this
-service can return a fractional value.
+| Field | Value |
+| --- | --- |
+| Service | `srvcs-floatpower` |
+| Slug | `floatpower` |
+| Repository | `srvcs/floatpower` |
+| Package | `srvcs-floatpower` |
+| Kind | `primitive` |
 
-It does not validate input itself — it delegates "is this a number" to
-[`srvcs-isnumber`](https://github.com/srvcs/isnumber) over HTTP, the single
-source of truth for that question, once per operand. Both integer and float
-inputs are accepted.
+## Function
 
-If the computed result is not a real number (`NaN` — for example a negative base
-raised to a fractional exponent like `(-8)^0.5`), the service rejects the request
-as a domain error (`422`). If `srvcs-isnumber` is unreachable, `srvcs-floatpower`
-reports itself **degraded (503)** rather than guessing.
+float arithmetic: base raised to exp
+
+## Dependencies
+
+| Dependency | Repository |
+| --- | --- |
+| `srvcs-isnumber` | [srvcs/isnumber](https://github.com/srvcs/isnumber) |
 
 ## API
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `GET` | `/` | Service identity, concern, and dependency list |
-| `POST` | `/` | Compute `base.powf(exp)` |
-| `GET` | `/healthz` `/readyz` `/metrics` `/openapi.json` | srvcs service standard surface |
+| `GET` | `/` | Service identity |
+| `POST` | `/` | Evaluate the service function |
+| `GET` | `/healthz` | Liveness probe |
+| `GET` | `/readyz` | Readiness probe |
+| `GET` | `/metrics` | Prometheus metrics |
+| `GET` | `/openapi.json` | OpenAPI document |
 
-```sh
-curl -s -X POST localhost:8080/ -H 'content-type: application/json' -d '{"base": 2, "exp": 10}'
-# {"base":2,"exp":10,"result":1024.0}
+## Inputs
 
-curl -s -X POST localhost:8080/ -H 'content-type: application/json' -d '{"base": 2, "exp": 0.5}'
-# {"base":2,"exp":0.5,"result":1.4142135623730951}
-```
+| Name | Type | Required |
+| --- | --- | --- |
+| `base` | `json` | yes |
+| `exp` | `json` | yes |
 
-Responses:
+## Outputs
 
-- `200 {"base": base, "exp": exp, "result": n}` — evaluated; `result` is an `f64`.
-- `422` — an operand is not a number (per `srvcs-isnumber`), or the result is
-  not a real number (e.g. negative base with a fractional exponent).
-- `503` — a dependency is unavailable.
-
-## Dependencies
-
-- [`srvcs-isnumber`](https://github.com/srvcs/isnumber) — input validation.
+| Name | Type |
+| --- | --- |
+| `base` | `json` |
+| `exp` | `json` |
+| `result` | `number` |
 
 ## Configuration
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `SRVCS_BIND_ADDR` | `0.0.0.0:8080` | Bind address |
-| `SRVCS_ISNUMBER_URL` | `http://127.0.0.1:8081` | Base URL of `srvcs-isnumber` |
 | `SRVCS_ENV` | `development` | Environment label for logs |
 | `RUST_LOG` | `info,tower_http=info` | Tracing filter |
+| `SRVCS_ISNUMBER_URL` | `http://127.0.0.1:8081` | Base URL for srvcs-isnumber |
 
-## Local checks
+## Error Behavior
+
+- `422` means the request could not be evaluated for the documented input shape.
+- `503` means a required dependency was unavailable or returned an unexpected response.
+- Dependency validation errors are forwarded when this service delegates validation.
+
+## Local Checks
 
 ```sh
 cargo fmt --check
@@ -61,9 +69,8 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-Orchestration tests stand up a mock `srvcs-isnumber` in-process, so the suite
-runs without the rest of the fleet. See
-[`srvcs/platform`](https://github.com/srvcs/platform) for the shared standard.
+See the [srvcs service standard](https://github.com/srvcs/platform/blob/main/STANDARD.md) for the full operational contract.
 
-> Note: the `cargoHash` in `flake.nix` is inherited from the template and must be
-> refreshed with a `nix build` before the Nix gates pass.
+## Metadata
+
+Machine-readable service metadata lives in `srvcs.yaml`. Keep it aligned with this README when the service contract changes.
